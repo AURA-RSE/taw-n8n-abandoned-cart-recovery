@@ -1,0 +1,1825 @@
+{
+  "name": "Slumdog - Abandoned Cart Recovery",
+  "nodes": [
+    {
+      "name": "Shopify Checkout Created",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        96
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shopify/checkout-created",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "name": "Normalize Checkout + Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        96
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "checkout_id",
+              "value": "={{ String($json.body?.token ?? $json.token ?? $json.body?.id ?? $json.id ?? \"\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "email",
+              "value": "={{ ($json.body?.email ?? $json.email ?? \"\").trim().toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "phone",
+              "value": "={{ ($json.body?.phone || $json.body?.shipping_address?.phone || $json.body?.billing_address?.phone || $json.phone || \"\").replace(/[^+0-9]/g, \"\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "name",
+              "value": "={{ $json.body?.customer?.first_name || $json.body?.billing_address?.first_name || $json.body?.shipping_address?.first_name || $json.name || \"there\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "cart_total",
+              "value": "={{ String($json.body?.total_price ?? $json.total_price ?? \"\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "currency",
+              "value": "={{ $json.body?.currency ?? $json.body?.presentment_currency ?? $json.currency ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a7",
+              "name": "checkout_url",
+              "value": "={{ $json.body?.abandoned_checkout_url ?? $json.checkout_url ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a8",
+              "name": "accepts_marketing",
+              "value": "={{ String($json.body?.buyer_accepts_marketing ?? $json.body?.customer?.accepts_marketing ?? $json.accepts_marketing ?? false) }}",
+              "type": "string"
+            },
+            {
+              "id": "a9",
+              "name": "created_at",
+              "value": "={{ $json.body?.created_at ?? $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "c1",
+              "name": "store_name",
+              "value": "Slumdog",
+              "type": "string"
+            },
+            {
+              "id": "c2",
+              "name": "discount_code",
+              "value": "COMEBACK10",
+              "type": "string"
+            },
+            {
+              "id": "c3",
+              "name": "discount_percent",
+              "value": 10,
+              "type": "number"
+            },
+            {
+              "id": "c4",
+              "name": "reminder_1_delay_minutes",
+              "value": 2,
+              "type": "number"
+            },
+            {
+              "id": "c5",
+              "name": "reminder_2_delay_minutes",
+              "value": 3,
+              "type": "number"
+            },
+            {
+              "id": "c6",
+              "name": "twilio_whatsapp_from",
+              "value": "+17372508034",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Has Contact + Consent?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        448,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "f1",
+              "leftValue": "={{ $json.checkout_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "f2",
+              "leftValue": "={{ $json.email !== \"\" || $json.phone !== \"\" }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            },
+            {
+              "id": "f3",
+              "leftValue": "={{ $json.accepts_marketing }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Log Cart (pending)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        96
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Slumdog Cart Recovery"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "checkout_id": "={{ $json.checkout_id }}",
+            "email": "={{ $json.email }}",
+            "phone": "={{ $json.phone }}",
+            "name": "={{ $json.name }}",
+            "cart_total": "={{ $json.cart_total }}",
+            "currency": "={{ $json.currency }}",
+            "checkout_url": "={{ $json.checkout_url }}",
+            "accepts_marketing": "={{ $json.accepts_marketing }}",
+            "created_at": "={{ $json.created_at }}",
+            "status": "pending",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "checkout_id"
+          ],
+          "schema": [
+            {
+              "id": "checkout_id",
+              "displayName": "checkout_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cart_total",
+              "displayName": "cart_total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "checkout_url",
+              "displayName": "checkout_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "accepts_marketing",
+              "displayName": "accepts_marketing",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminder_1_sent",
+              "displayName": "reminder_1_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminder_2_sent",
+              "displayName": "reminder_2_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "RAW",
+          "useAppend": true
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "name": "Wait Before Reminder 1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        96
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": "={{ $('Normalize Checkout + Config').item.json.reminder_1_delay_minutes }}",
+        "unit": "minutes"
+      }
+    },
+    {
+      "name": "Lookup Cart Status 1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1120,
+        96
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Slumdog Cart Recovery"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "checkout_id",
+              "lookupValue": "={{ $('Normalize Checkout + Config').item.json.checkout_id }}"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "name": "Still Abandoned? (1)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1344,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "i1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "pending",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "AI Write Reminder 1",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        1568,
+        96
+      ],
+      "parameters": {
+        "resource": "text",
+        "operation": "response",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-4o-mini"
+        },
+        "responses": {
+          "values": [
+            {
+              "type": "text",
+              "role": "system",
+              "content": "You write short, friendly abandoned-cart reminders for an online store. Plain text only, no subject line, no emojis overload, under 60 words. Never invent discounts or products."
+            },
+            {
+              "type": "text",
+              "role": "user",
+              "content": "=Customer first name: {{ $json.name }}\nStore: {{ $('Normalize Checkout + Config').item.json.store_name }}\nCart total: {{ $json.cart_total }} {{ $json.currency }}\nCheckout link: {{ $json.checkout_url }}\n\nWrite reminder #1: a gentle nudge that their items are still saved. Include the checkout link exactly once. No discount."
+            }
+          ]
+        },
+        "simplify": true,
+        "options": {
+          "maxTokens": 300,
+          "temperature": 0.7
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI"
+        }
+      }
+    },
+    {
+      "name": "Prepare Reminder 1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1920,
+        96
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "10",
+              "name": "checkout_id",
+              "value": "={{ $('Lookup Cart Status 1').item.json.checkout_id }}",
+              "type": "string"
+            },
+            {
+              "id": "11",
+              "name": "email",
+              "value": "={{ $('Lookup Cart Status 1').item.json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "12",
+              "name": "phone",
+              "value": "={{ $('Normalize Checkout + Config').item.json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "13",
+              "name": "subject",
+              "value": "=You left something in your cart, {{ $('Lookup Cart Status 1').item.json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "14",
+              "name": "message",
+              "value": "={{ (($json.output?.[0]?.content?.[0]?.text ?? $json.text ?? '') + '').trim() || ('Hi ' + $('Lookup Cart Status 1').item.json.name + ', your cart at ' + $('Normalize Checkout + Config').item.json.store_name + ' is still saved. Complete your order here: ' + $('Lookup Cart Status 1').item.json.checkout_url) }}",
+              "type": "string"
+            },
+            {
+              "id": "15",
+              "name": "ai_fallback_used",
+              "value": "={{ !(($json.output?.[0]?.content?.[0]?.text ?? $json.text ?? '') + '').trim() }}",
+              "type": "boolean"
+            },
+            {
+              "id": "16",
+              "name": "twilio_whatsapp_from",
+              "value": "={{ $('Normalize Checkout + Config').item.json.twilio_whatsapp_from }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Has Phone? (1)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        2144,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "h1",
+              "leftValue": "={{ $json.phone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Send WhatsApp Reminder 1",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        0
+      ],
+      "parameters": {
+        "resource": "sms",
+        "operation": "send",
+        "from": "={{ $json.twilio_whatsapp_from }}",
+        "to": "={{ $json.phone }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.message }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "twilioApi": {
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "name": "Has Email? (1)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        2144,
+        192
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "e1",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Send Email Reminder 1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2368,
+        192
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.message }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "name": "Mark Reminder 1 Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2144,
+        384
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Slumdog Cart Recovery"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "checkout_id": "={{ $json.checkout_id }}",
+            "reminder_1_sent": "={{ $now.toISO() }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "checkout_id"
+          ],
+          "schema": [
+            {
+              "id": "checkout_id",
+              "displayName": "checkout_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cart_total",
+              "displayName": "cart_total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "checkout_url",
+              "displayName": "checkout_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "accepts_marketing",
+              "displayName": "accepts_marketing",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminder_1_sent",
+              "displayName": "reminder_1_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminder_2_sent",
+              "displayName": "reminder_2_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "name": "Wait Before Reminder 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2368,
+        384
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": "={{ $('Normalize Checkout + Config').item.json.reminder_2_delay_minutes }}",
+        "unit": "minutes"
+      }
+    },
+    {
+      "name": "Lookup Cart Status 2",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2592,
+        384
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Slumdog Cart Recovery"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "checkout_id",
+              "lookupValue": "={{ $('Normalize Checkout + Config').item.json.checkout_id }}"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "name": "Still Abandoned? (2)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        2816,
+        384
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "i2",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "pending",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "AI Write Reminder 2 (Discount)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        3040,
+        384
+      ],
+      "parameters": {
+        "resource": "text",
+        "operation": "response",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-4o-mini"
+        },
+        "responses": {
+          "values": [
+            {
+              "type": "text",
+              "role": "system",
+              "content": "You write short, friendly abandoned-cart reminders for an online store. Plain text only, no subject line, under 70 words. Only mention the discount code you are given."
+            },
+            {
+              "type": "text",
+              "role": "user",
+              "content": "=Customer first name: {{ $json.name }}\nStore: {{ $('Normalize Checkout + Config').item.json.store_name }}\nCart total: {{ $json.cart_total }} {{ $json.currency }}\nCheckout link: {{ $json.checkout_url }}\nDiscount code: {{ $('Normalize Checkout + Config').item.json.discount_code }} ({{ $('Normalize Checkout + Config').item.json.discount_percent }}% off)\n\nWrite reminder #2 (final): offer the discount code with gentle urgency. Include the code and the checkout link exactly once each."
+            }
+          ]
+        },
+        "simplify": true,
+        "options": {
+          "maxTokens": 300,
+          "temperature": 0.7
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI"
+        }
+      }
+    },
+    {
+      "name": "Prepare Reminder 2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        3392,
+        384
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "20",
+              "name": "checkout_id",
+              "value": "={{ $('Lookup Cart Status 2').item.json.checkout_id }}",
+              "type": "string"
+            },
+            {
+              "id": "21",
+              "name": "email",
+              "value": "={{ $('Lookup Cart Status 2').item.json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "22",
+              "name": "phone",
+              "value": "={{ $('Normalize Checkout + Config').item.json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "23",
+              "name": "subject",
+              "value": "={{ $('Normalize Checkout + Config').item.json.discount_percent }}% off to finish your order, {{ $('Lookup Cart Status 2').item.json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "24",
+              "name": "message",
+              "value": "={{ (($json.output?.[0]?.content?.[0]?.text ?? $json.text ?? '') + '').trim() || ('Hi ' + $('Lookup Cart Status 2').item.json.name + ', use code ' + $('Normalize Checkout + Config').item.json.discount_code + ' for ' + $('Normalize Checkout + Config').item.json.discount_percent + '% off your cart: ' + $('Lookup Cart Status 2').item.json.checkout_url) }}",
+              "type": "string"
+            },
+            {
+              "id": "25",
+              "name": "ai_fallback_used",
+              "value": "={{ !(($json.output?.[0]?.content?.[0]?.text ?? $json.text ?? '') + '').trim() }}",
+              "type": "boolean"
+            },
+            {
+              "id": "26",
+              "name": "twilio_whatsapp_from",
+              "value": "={{ $('Normalize Checkout + Config').item.json.twilio_whatsapp_from }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Has Phone? (2)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        3616,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "h2",
+              "leftValue": "={{ $json.phone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Send WhatsApp Reminder 2",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        3840,
+        96
+      ],
+      "parameters": {
+        "resource": "sms",
+        "operation": "send",
+        "from": "={{ $json.twilio_whatsapp_from }}",
+        "to": "={{ $json.phone }}",
+        "toWhatsapp": true,
+        "message": "={{ $json.message }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "twilioApi": {
+          "name": "Twilio account"
+        }
+      }
+    },
+    {
+      "name": "Has Email? (2)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        3616,
+        288
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "e2",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Send Email Reminder 2",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3840,
+        288
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.message }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "name": "Mark Reminder 2 Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3616,
+        480
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Slumdog Cart Recovery"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "checkout_id": "={{ $json.checkout_id }}",
+            "status": "reminders_complete",
+            "reminder_2_sent": "={{ $now.toISO() }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "checkout_id"
+          ],
+          "schema": [
+            {
+              "id": "checkout_id",
+              "displayName": "checkout_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cart_total",
+              "displayName": "cart_total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "checkout_url",
+              "displayName": "checkout_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "accepts_marketing",
+              "displayName": "accepts_marketing",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminder_1_sent",
+              "displayName": "reminder_1_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminder_2_sent",
+              "displayName": "reminder_2_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "name": "Shopify Order Created",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        704
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shopify/order-created",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "name": "Normalize Order",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        704
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "o1",
+              "name": "checkout_id",
+              "value": "={{ String($json.body?.checkout_token ?? $json.checkout_token ?? \"\") }}",
+              "type": "string"
+            },
+            {
+              "id": "o2",
+              "name": "order_id",
+              "value": "={{ String($json.body?.id ?? $json.id ?? \"\") }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Has Checkout Token?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        448,
+        704
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "t1",
+              "leftValue": "={{ $json.checkout_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Mark Cart Recovered",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        704
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Slumdog Cart Recovery"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "checkout_id": "={{ $json.checkout_id }}",
+            "status": "recovered",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "checkout_id"
+          ],
+          "schema": [
+            {
+              "id": "checkout_id",
+              "displayName": "checkout_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cart_total",
+              "displayName": "cart_total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "checkout_url",
+              "displayName": "checkout_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "accepts_marketing",
+              "displayName": "accepts_marketing",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminder_1_sent",
+              "displayName": "reminder_1_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminder_2_sent",
+              "displayName": "reminder_2_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "name": "Overview Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        -240
+      ],
+      "parameters": {
+        "content": "## Abandoned Cart Recovery\n1. Shopify checkout webhook logs cart to Sheets (status pending), only if buyer accepted marketing.\n2. After delay 1: if still pending, AI writes reminder, sent via WhatsApp (Twilio) + Gmail.\n3. After delay 2: if still pending, AI writes final reminder with discount code.\n4. Shopify order webhook marks the cart recovered, which stops reminders.\nDelays + discount live in **Normalize Checkout + Config** (demo: 2 and 3 minutes).",
+        "color": 4,
+        "width": 384,
+        "height": 224
+      }
+    }
+  ],
+  "connections": {
+    "Shopify Checkout Created": {
+      "main": [
+        [
+          {
+            "node": "Normalize Checkout + Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Checkout + Config": {
+      "main": [
+        [
+          {
+            "node": "Has Contact + Consent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Contact + Consent?": {
+      "main": [
+        [
+          {
+            "node": "Log Cart (pending)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Cart (pending)": {
+      "main": [
+        [
+          {
+            "node": "Wait Before Reminder 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before Reminder 1": {
+      "main": [
+        [
+          {
+            "node": "Lookup Cart Status 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Cart Status 1": {
+      "main": [
+        [
+          {
+            "node": "Still Abandoned? (1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Still Abandoned? (1)": {
+      "main": [
+        [
+          {
+            "node": "AI Write Reminder 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Write Reminder 1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reminder 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Reminder 1": {
+      "main": [
+        [
+          {
+            "node": "Has Phone? (1)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Email? (1)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mark Reminder 1 Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Phone? (1)": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Reminder 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Email? (1)": {
+      "main": [
+        [
+          {
+            "node": "Send Email Reminder 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Reminder 1 Sent": {
+      "main": [
+        [
+          {
+            "node": "Wait Before Reminder 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before Reminder 2": {
+      "main": [
+        [
+          {
+            "node": "Lookup Cart Status 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Cart Status 2": {
+      "main": [
+        [
+          {
+            "node": "Still Abandoned? (2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Still Abandoned? (2)": {
+      "main": [
+        [
+          {
+            "node": "AI Write Reminder 2 (Discount)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Write Reminder 2 (Discount)": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reminder 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Reminder 2": {
+      "main": [
+        [
+          {
+            "node": "Has Phone? (2)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Email? (2)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mark Reminder 2 Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Phone? (2)": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Reminder 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Email? (2)": {
+      "main": [
+        [
+          {
+            "node": "Send Email Reminder 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shopify Order Created": {
+      "main": [
+        [
+          {
+            "node": "Normalize Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Order": {
+      "main": [
+        [
+          {
+            "node": "Has Checkout Token?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Checkout Token?": {
+      "main": [
+        [
+          {
+            "node": "Mark Cart Recovered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "tags": []
+}
