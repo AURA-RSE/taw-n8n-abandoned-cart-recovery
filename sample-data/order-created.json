@@ -1,0 +1,10 @@
+{
+  "id": 990000000101,
+  "checkout_token": "tok_demo_001",
+  "email": "ada.testbuyer@example.com",
+  "created_at": "2026-11-03T10:04:00+01:00",
+  "currency": "USD",
+  "total_price": "40.50",
+  "discount_codes": [{ "code": "COMEBACK10", "amount": "4.50", "type": "percentage" }],
+  "customer": { "first_name": "Ada", "last_name": "Testbuyer" }
+}
